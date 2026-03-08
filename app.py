@@ -1,7 +1,29 @@
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, request, jsonify
 from datetime import datetime
+import json
+import os
 
 app = Flask(__name__)
+
+# Vercel KV database simulation (using file storage for persistence)
+DATA_FILE = '/tmp/inventory_data.json'
+
+def load_data():
+    try:
+        if os.path.exists(DATA_FILE):
+            with open(DATA_FILE, 'r') as f:
+                return json.load(f)
+    except:
+        pass
+    return {"inventory": [], "billing": [], "notes": []}
+
+def save_data(data):
+    try:
+        with open(DATA_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+        return True
+    except:
+        return False
 
 @app.route('/')
 def index():
@@ -108,6 +130,7 @@ def index():
                     <div class="card">
                         <h2>Add Product</h2>
                         <div id="inventorySuccess" class="success hidden"></div>
+                        <div id="inventoryError" class="error hidden"></div>
                         <form id="inventoryForm">
                             <div class="form-group">
                                 <label>Product Name *</label>
@@ -152,7 +175,7 @@ def index():
                                 </tr>
                             </thead>
                             <tbody id="inventoryList">
-                                <tr><td colspan="6" style="text-align: center;">No products added yet</td></tr>
+                                <tr><td colspan="6" style="text-align: center;">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -163,6 +186,7 @@ def index():
                     <div class="card">
                         <h2>Create Invoice</h2>
                         <div id="billingSuccess" class="success hidden"></div>
+                        <div id="billingError" class="error hidden"></div>
                         <form id="billingForm">
                             <div class="form-group">
                                 <label>Customer Name *</label>
@@ -201,7 +225,7 @@ def index():
                                 </tr>
                             </thead>
                             <tbody id="billingList">
-                                <tr><td colspan="4" style="text-align: center;">No invoices created yet</td></tr>
+                                <tr><td colspan="4" style="text-align: center;">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -212,7 +236,8 @@ def index():
                     <div class="card">
                         <h2>Add Note</h2>
                         <div id="notesSuccess" class="success hidden"></div>
-                        <form onsubmit="handleAddNote(event)">
+                        <div id="notesError" class="error hidden"></div>
+                        <form id="notesForm">
                             <div class="form-group">
                                 <label>Title *</label>
                                 <input type="text" id="noteTitle" required>
@@ -231,7 +256,7 @@ def index():
                                 <label>Content *</label>
                                 <textarea id="noteContent" rows="4" required></textarea>
                             </div>
-                            <button type="submit" class="btn">Add Note</button>
+                            <button type="button" class="btn" onclick="addNote()">Add Note</button>
                         </form>
                         
                         <h3 style="margin-top: 2rem;">Notes List</h3>
@@ -245,7 +270,7 @@ def index():
                                 </tr>
                             </thead>
                             <tbody id="notesList">
-                                <tr><td colspan="4" style="text-align: center;">No notes added yet</td></tr>
+                                <tr><td colspan="4" style="text-align: center;">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -259,6 +284,38 @@ def index():
         let billing = [];
         let notes = [];
         
+        // Load data from server
+        async function loadData() {
+            try {
+                const response = await fetch('/api/data');
+                const data = await response.json();
+                inventory = data.inventory || [];
+                billing = data.billing || [];
+                notes = data.notes || [];
+                updateAllLists();
+                loadDashboard();
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+        
+        // Save data to server
+        async function saveData() {
+            try {
+                const response = await fetch('/api/data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ inventory, billing, notes })
+                });
+                return response.ok;
+            } catch (error) {
+                console.error('Error saving data:', error);
+                return false;
+            }
+        }
+        
         function handleLogin(event) {
             event.preventDefault();
             const email = document.getElementById('email').value;
@@ -267,10 +324,7 @@ def index():
             if ((email === '743663' || email === 'admin@inventory.com') && password === 'girish7890@A') {
                 document.getElementById('loginPage').classList.remove('active');
                 document.getElementById('mainApp').classList.add('active');
-                loadDashboard();
-                updateInventoryList();
-                updateBillingList();
-                updateNotesList();
+                loadData(); // Load data from server
             } else {
                 document.getElementById('loginError').textContent = 'Invalid credentials';
                 document.getElementById('loginError').classList.remove('hidden');
@@ -292,7 +346,7 @@ def index():
             event.target.classList.add('active');
         }
         
-        function showSuccess(elementId, message) {
+        function showMessage(elementId, message, isError = false) {
             const element = document.getElementById(elementId);
             element.textContent = message;
             element.classList.remove('hidden');
@@ -306,6 +360,12 @@ def index():
             
             const totalValue = inventory.reduce((sum, item) => sum + (item.quantity * item.price), 0);
             document.getElementById('totalValue').textContent = '₹' + totalValue.toFixed(2);
+        }
+        
+        function updateAllLists() {
+            updateInventoryList();
+            updateBillingList();
+            updateNotesList();
         }
         
         function updateInventoryList() {
@@ -353,7 +413,7 @@ def index():
             });
         }
         
-        function addProduct() {
+        async function addProduct() {
             const name = document.getElementById('productName').value;
             const sku = document.getElementById('productSku').value;
             const category = document.getElementById('productCategory').value;
@@ -361,7 +421,7 @@ def index():
             const price = document.getElementById('productPrice').value;
             
             if (!name || !sku || !category || !quantity || !price) {
-                alert('Please fill all required fields');
+                showMessage('inventoryError', 'Please fill all required fields', true);
                 return;
             }
             
@@ -375,25 +435,33 @@ def index():
             };
             
             inventory.push(item);
-            updateInventoryList();
-            loadDashboard();
             
-            // Reset form
-            document.getElementById('productName').value = '';
-            document.getElementById('productSku').value = '';
-            document.getElementById('productCategory').value = '';
-            document.getElementById('productQuantity').value = '';
-            document.getElementById('productPrice').value = '';
-            
-            showSuccess('inventorySuccess', 'Product added successfully!');
+            // Save to server
+            const saved = await saveData();
+            if (saved) {
+                updateInventoryList();
+                loadDashboard();
+                
+                // Reset form
+                document.getElementById('productName').value = '';
+                document.getElementById('productSku').value = '';
+                document.getElementById('productCategory').value = '';
+                document.getElementById('productQuantity').value = '';
+                document.getElementById('productPrice').value = '';
+                
+                showMessage('inventorySuccess', 'Product added successfully!');
+            } else {
+                showMessage('inventoryError', 'Failed to save product', true);
+                inventory.pop(); // Remove the item if save failed
+            }
         }
         
-        function createInvoice() {
+        async function createInvoice() {
             const customerName = document.getElementById('customerName').value;
             const invoiceNumber = document.getElementById('invoiceNumber').value;
             
             if (!customerName || !invoiceNumber) {
-                alert('Please fill all required fields');
+                showMessage('billingError', 'Please fill all required fields', true);
                 return;
             }
             
@@ -409,7 +477,7 @@ def index():
             });
             
             if (items.length === 0) {
-                alert('Please add at least one item');
+                showMessage('billingError', 'Please add at least one item', true);
                 return;
             }
             
@@ -423,22 +491,80 @@ def index():
             };
             
             billing.push(bill);
-            updateBillingList();
-            loadDashboard();
             
-            // Reset form
-            document.getElementById('customerName').value = '';
-            document.getElementById('invoiceNumber').value = '';
-            document.getElementById('billingItems').innerHTML = '<div class="billing-item"><input type="text" placeholder="Item name" class="item-name" required><input type="number" placeholder="Quantity" class="item-quantity" min="1" required><input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required><button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button></div>';
-            updateBillingTotal();
-            
-            showSuccess('billingSuccess', 'Invoice created successfully!');
+            // Save to server
+            const saved = await saveData();
+            if (saved) {
+                updateBillingList();
+                loadDashboard();
+                
+                // Reset form
+                document.getElementById('customerName').value = '';
+                document.getElementById('invoiceNumber').value = '';
+                document.getElementById('billingItems').innerHTML = '<div class="billing-item"><input type="text" placeholder="Item name" class="item-name" required><input type="number" placeholder="Quantity" class="item-quantity" min="1" required><input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required><button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button></div>';
+                updateBillingTotal();
+                
+                showMessage('billingSuccess', 'Invoice created successfully!');
+            } else {
+                showMessage('billingError', 'Failed to save invoice', true);
+                billing.pop(); // Remove the bill if save failed
+            }
         }
         
-        function deleteInventory(id) {
+        async function addNote() {
+            const title = document.getElementById('noteTitle').value;
+            const category = document.getElementById('noteCategory').value;
+            const content = document.getElementById('noteContent').value;
+            
+            if (!title || !category || !content) {
+                showMessage('notesError', 'Please fill all required fields', true);
+                return;
+            }
+            
+            const note = {
+                id: Date.now().toString(),
+                title: title,
+                category: category,
+                content: content,
+                created_at: new Date().toISOString()
+            };
+            
+            notes.push(note);
+            
+            // Save to server
+            const saved = await saveData();
+            if (saved) {
+                updateNotesList();
+                loadDashboard();
+                
+                // Reset form
+                document.getElementById('noteTitle').value = '';
+                document.getElementById('noteCategory').value = '';
+                document.getElementById('noteContent').value = '';
+                
+                showMessage('notesSuccess', 'Note added successfully!');
+            } else {
+                showMessage('notesError', 'Failed to save note', true);
+                notes.pop(); // Remove the note if save failed
+            }
+        }
+        
+        async function deleteInventory(id) {
             inventory = inventory.filter(item => item.id !== id);
-            updateInventoryList();
-            loadDashboard();
+            const saved = await saveData();
+            if (saved) {
+                updateInventoryList();
+                loadDashboard();
+            }
+        }
+        
+        async function deleteNote(id) {
+            notes = notes.filter(note => note.id !== id);
+            const saved = await saveData();
+            if (saved) {
+                updateNotesList();
+                loadDashboard();
+            }
         }
         
         function addBillingItem() {
@@ -474,39 +600,6 @@ def index():
             document.getElementById('totalAmount').textContent = total.toFixed(2);
         }
         
-        function handleCreateInvoice(event) {
-            event.preventDefault();
-        }
-        
-        function handleAddNote(event) {
-            event.preventDefault();
-            
-            const note = {
-                id: Date.now().toString(),
-                title: document.getElementById('noteTitle').value,
-                category: document.getElementById('noteCategory').value,
-                content: document.getElementById('noteContent').value,
-                created_at: new Date().toISOString()
-            };
-            
-            notes.push(note);
-            updateNotesList();
-            loadDashboard();
-            
-            // Reset form
-            document.getElementById('noteTitle').value = '';
-            document.getElementById('noteCategory').value = '';
-            document.getElementById('noteContent').value = '';
-            
-            showSuccess('notesSuccess', 'Note added successfully!');
-        }
-        
-        function deleteNote(id) {
-            notes = notes.filter(note => note.id !== id);
-            updateNotesList();
-            loadDashboard();
-        }
-        
         // Initialize billing total calculation
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('#billingItems input').forEach(input => {
@@ -517,6 +610,19 @@ def index():
 </body>
 </html>
 ''')
+
+# API endpoints for data persistence
+@app.route('/api/data', methods=['GET'])
+def get_data():
+    return jsonify(load_data())
+
+@app.route('/api/data', methods=['POST'])
+def save_data_endpoint():
+    data = request.get_json()
+    if save_data(data):
+        return jsonify({"success": True})
+    else:
+        return jsonify({"success": False}), 500
 
 @app.route('/health')
 def health():
