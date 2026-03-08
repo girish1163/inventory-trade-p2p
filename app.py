@@ -90,6 +90,16 @@ def get_inventory_items():
 @app.route('/api/inventory', methods=['POST'])
 def create_inventory_item():
     data = request.get_json(silent=True) or {}
+    
+    # Validate required fields
+    if not data.get('name') or not data.get('sku'):
+        return jsonify({"message": "Name and SKU are required"}), 400
+    
+    # Check for duplicate SKU
+    for item in DATABASE["inventory"]:
+        if item["sku"] == data["sku"]:
+            return jsonify({"message": "SKU already exists"}), 400
+    
     new_item = {
         "id": str(uuid.uuid4()),
         **data,
@@ -133,6 +143,16 @@ def get_billing_items():
 @app.route('/api/billing', methods=['POST'])
 def create_billing_item():
     data = request.get_json(silent=True) or {}
+    
+    # Validate required fields
+    if not data.get('customer_name') or not data.get('invoice_number'):
+        return jsonify({"message": "Customer name and invoice number are required"}), 400
+    
+    # Check for duplicate invoice number
+    for bill in DATABASE["billing"]:
+        if bill["invoice_number"] == data["invoice_number"]:
+            return jsonify({"message": "Invoice number already exists"}), 400
+    
     new_billing = {
         "id": str(uuid.uuid4()),
         **data,
@@ -146,6 +166,9 @@ def create_billing_item():
 def update_billing_status(billing_id):
     data = request.get_json(silent=True) or {}
     status = data.get('status')
+    
+    if status not in ['Pending', 'Paid', 'Cancelled']:
+        return jsonify({"message": "Invalid status"}), 400
     
     for i, item in enumerate(DATABASE["billing"]):
         if item["id"] == billing_id:
@@ -162,6 +185,11 @@ def get_notes():
 @app.route('/api/notes', methods=['POST'])
 def create_note():
     data = request.get_json(silent=True) or {}
+    
+    # Validate required fields
+    if not data.get('title') or not data.get('content'):
+        return jsonify({"message": "Title and content are required"}), 400
+    
     new_note = {
         "id": str(uuid.uuid4()),
         **data,
@@ -214,7 +242,7 @@ def get_dashboard_stats():
         "total_notes": total_notes
     })
 
-# HTML Template with Walmart-style design
+# HTML Template with Walmart-style design and full functionality
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -465,6 +493,15 @@ HTML_TEMPLATE = """
             border: 1px solid #f5c6cb;
         }
         
+        .success-message {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 0.75rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            border: 1px solid #c3e6cb;
+        }
+        
         .hidden {
             display: none;
         }
@@ -487,6 +524,12 @@ HTML_TEMPLATE = """
         
         .mb-3 {
             margin-bottom: 1.5rem;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
         }
         
         @media (max-width: 768px) {
@@ -525,6 +568,7 @@ HTML_TEMPLATE = """
                     </div>
                     
                     <div id="loginError" class="error-message hidden"></div>
+                    <div id="loginSuccess" class="success-message hidden"></div>
                     
                     <form id="loginForm">
                         <div class="form-group">
@@ -591,7 +635,7 @@ HTML_TEMPLATE = """
                     
                     <div class="card">
                         <div class="card-header">Quick Actions</div>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                        <div class="form-row">
                             <button class="btn" onclick="showPage('inventory')">Add Item</button>
                             <button class="btn" onclick="showPage('billing')">Create Invoice</button>
                             <button class="btn" onclick="showPage('notes')">Add Note</button>
@@ -631,17 +675,17 @@ HTML_TEMPLATE = """
                     <div class="card">
                         <div class="card-header">Add/Edit Item</div>
                         <form id="inventoryForm">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+                            <div class="form-row">
                                 <div class="form-group">
-                                    <label>Name</label>
+                                    <label>Name *</label>
                                     <input type="text" name="name" required>
                                 </div>
                                 <div class="form-group">
-                                    <label>SKU</label>
+                                    <label>SKU *</label>
                                     <input type="text" name="sku" required>
                                 </div>
                                 <div class="form-group">
-                                    <label>Category</label>
+                                    <label>Category *</label>
                                     <select name="category" required>
                                         <option value="">Select Category</option>
                                         <option value="Electronics">Electronics</option>
@@ -652,15 +696,15 @@ HTML_TEMPLATE = """
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>Quantity</label>
+                                    <label>Quantity *</label>
                                     <input type="number" name="quantity" required min="0">
                                 </div>
                                 <div class="form-group">
-                                    <label>Min Stock Level</label>
+                                    <label>Min Stock Level *</label>
                                     <input type="number" name="min_stock_level" required min="0">
                                 </div>
                                 <div class="form-group">
-                                    <label>Unit Price (₹)</label>
+                                    <label>Unit Price (₹) *</label>
                                     <input type="number" name="unit_price" required min="0" step="0.01">
                                 </div>
                                 <div class="form-group">
@@ -711,27 +755,27 @@ HTML_TEMPLATE = """
                     <div class="card">
                         <div class="card-header">Create Invoice</div>
                         <form id="billingForm">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+                            <div class="form-row">
                                 <div class="form-group">
-                                    <label>Customer Name</label>
+                                    <label>Customer Name *</label>
                                     <input type="text" name="customer_name" required>
                                 </div>
                                 <div class="form-group">
-                                    <label>Invoice Number</label>
+                                    <label>Invoice Number *</label>
                                     <input type="text" name="invoice_number" required>
                                 </div>
                                 <div class="form-group">
-                                    <label>Due Date</label>
+                                    <label>Due Date *</label>
                                     <input type="date" name="due_date" required>
                                 </div>
                             </div>
                             <div class="form-group">
                                 <label>Items</label>
                                 <div id="billingItems">
-                                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                        <input type="text" placeholder="Item name" class="item-name">
-                                        <input type="number" placeholder="Quantity" class="item-quantity" min="1">
-                                        <input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01">
+                                    <div class="billing-item-row">
+                                        <input type="text" placeholder="Item name" class="item-name" required>
+                                        <input type="number" placeholder="Quantity" class="item-quantity" min="1" required>
+                                        <input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required>
                                         <input type="text" placeholder="SKU" class="item-sku">
                                         <button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button>
                                     </div>
@@ -772,13 +816,13 @@ HTML_TEMPLATE = """
                     <div class="card">
                         <div class="card-header">Add Note</div>
                         <form id="notesForm">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+                            <div class="form-row">
                                 <div class="form-group">
-                                    <label>Title</label>
+                                    <label>Title *</label>
                                     <input type="text" name="title" required>
                                 </div>
                                 <div class="form-group">
-                                    <label>Category</label>
+                                    <label>Category *</label>
                                     <select name="category" required>
                                         <option value="">Select Category</option>
                                         <option value="General">General</option>
@@ -790,7 +834,7 @@ HTML_TEMPLATE = """
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label>Content</label>
+                                <label>Content *</label>
                                 <textarea name="content" rows="4" required></textarea>
                             </div>
                             <button type="submit" class="btn">Save Note</button>
@@ -850,14 +894,13 @@ HTML_TEMPLATE = """
                     localStorage.setItem('token', authToken);
                     document.getElementById('loginPage').classList.remove('active');
                     document.getElementById('mainApp').classList.add('active');
+                    showSuccess('Login successful!');
                     loadDashboard();
                 } else {
-                    document.getElementById('loginError').textContent = result.message || 'Login failed';
-                    document.getElementById('loginError').classList.remove('hidden');
+                    showError('loginError', result.message || 'Login failed');
                 }
             } catch (error) {
-                document.getElementById('loginError').textContent = 'Network error. Please try again.';
-                document.getElementById('loginError').classList.remove('hidden');
+                showError('loginError', 'Network error. Please try again.');
             }
         });
         
@@ -869,7 +912,7 @@ HTML_TEMPLATE = """
             document.getElementById('mainApp').classList.remove('active');
             document.getElementById('loginPage').classList.add('active');
             document.getElementById('loginForm').reset();
-            document.getElementById('loginError').classList.add('hidden');
+            hideError('loginError');
         }
         
         // Page navigation
@@ -890,6 +933,29 @@ HTML_TEMPLATE = """
             if (pageName === 'inventory') loadInventory();
             if (pageName === 'billing') loadBilling();
             if (pageName === 'notes') loadNotes();
+        }
+        
+        // Error and success message functions
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.classList.remove('hidden');
+            setTimeout(() => {
+                element.classList.add('hidden');
+            }, 5000);
+        }
+        
+        function showSuccess(message) {
+            const element = document.getElementById('loginSuccess');
+            element.textContent = message;
+            element.classList.remove('hidden');
+            setTimeout(() => {
+                element.classList.add('hidden');
+            }, 3000);
+        }
+        
+        function hideError(elementId) {
+            document.getElementById(elementId).classList.add('hidden');
         }
         
         // API helper functions
@@ -1055,6 +1121,7 @@ HTML_TEMPLATE = """
                 resetInventoryForm();
                 loadInventory();
                 loadDashboard();
+                showSuccess('Item added successfully!');
             }
         });
         
@@ -1068,6 +1135,7 @@ HTML_TEMPLATE = """
                 if (result) {
                     loadInventory();
                     loadDashboard();
+                    showSuccess('Item deleted successfully!');
                 }
             }
         }
@@ -1080,7 +1148,7 @@ HTML_TEMPLATE = """
             
             // Get items from the form
             const items = [];
-            const itemElements = document.querySelectorAll('#billingItems > div');
+            const itemElements = document.querySelectorAll('.billing-item-row');
             itemElements.forEach(element => {
                 const name = element.querySelector('.item-name').value;
                 const quantity = parseInt(element.querySelector('.item-quantity').value);
@@ -1092,35 +1160,32 @@ HTML_TEMPLATE = """
                 }
             });
             
+            if (items.length === 0) {
+                alert('Please add at least one item to the invoice');
+                return;
+            }
+            
             data.items = items;
             data.total_amount = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
             
             const result = await apiCall('/api/billing', 'POST', data);
             if (result) {
                 e.target.reset();
-                document.getElementById('billingItems').innerHTML = `
-                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 0.5rem; margin-bottom: 0.5rem;">
-                        <input type="text" placeholder="Item name" class="item-name">
-                        <input type="number" placeholder="Quantity" class="item-quantity" min="1">
-                        <input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01">
-                        <input type="text" placeholder="SKU" class="item-sku">
-                        <button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button>
-                    </div>
-                `;
-                updateBillingTotal();
+                resetBillingItems();
                 loadBilling();
                 loadDashboard();
+                showSuccess('Invoice created successfully!');
             }
         });
         
         function addBillingItem() {
             const container = document.getElementById('billingItems');
             const newItem = document.createElement('div');
-            newItem.style.cssText = 'display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 0.5rem; margin-bottom: 0.5rem;';
+            newItem.className = 'billing-item-row';
             newItem.innerHTML = `
-                <input type="text" placeholder="Item name" class="item-name">
-                <input type="number" placeholder="Quantity" class="item-quantity" min="1">
-                <input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01">
+                <input type="text" placeholder="Item name" class="item-name" required>
+                <input type="number" placeholder="Quantity" class="item-quantity" min="1" required>
+                <input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required>
                 <input type="text" placeholder="SKU" class="item-sku">
                 <button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button>
             `;
@@ -1133,12 +1198,17 @@ HTML_TEMPLATE = """
         }
         
         function removeBillingItem(button) {
-            button.parentElement.remove();
-            updateBillingTotal();
+            const container = document.getElementById('billingItems');
+            if (container.children.length > 1) {
+                button.parentElement.remove();
+                updateBillingTotal();
+            } else {
+                alert('You must have at least one item');
+            }
         }
         
         function updateBillingTotal() {
-            const items = document.querySelectorAll('#billingItems > div');
+            const items = document.querySelectorAll('.billing-item-row');
             let total = 0;
             
             items.forEach(item => {
@@ -1150,11 +1220,26 @@ HTML_TEMPLATE = """
             document.getElementById('totalAmount').textContent = total.toFixed(2);
         }
         
+        function resetBillingItems() {
+            const container = document.getElementById('billingItems');
+            container.innerHTML = `
+                <div class="billing-item-row">
+                    <input type="text" placeholder="Item name" class="item-name" required>
+                    <input type="number" placeholder="Quantity" class="item-quantity" min="1" required>
+                    <input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required>
+                    <input type="text" placeholder="SKU" class="item-sku">
+                    <button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button>
+                </div>
+            `;
+            updateBillingTotal();
+        }
+        
         async function updateBillStatus(billId, status) {
             const result = await apiCall(`/api/billing/${billId}/status`, 'PUT', { status });
             if (result) {
                 loadBilling();
                 loadDashboard();
+                showSuccess('Bill status updated successfully!');
             }
         }
         
@@ -1169,6 +1254,7 @@ HTML_TEMPLATE = """
                 e.target.reset();
                 loadNotes();
                 loadDashboard();
+                showSuccess('Note added successfully!');
             }
         });
         
@@ -1178,6 +1264,7 @@ HTML_TEMPLATE = """
                 if (result) {
                     loadNotes();
                     loadDashboard();
+                    showSuccess('Note deleted successfully!');
                 }
             }
         }
@@ -1200,6 +1287,27 @@ HTML_TEMPLATE = """
             });
         });
     </script>
+    
+    <style>
+        .billing-item-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr auto;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            align-items: center;
+        }
+        
+        .billing-item-row input {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .billing-item-row .btn {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+    </style>
 </body>
 </html>
 """
