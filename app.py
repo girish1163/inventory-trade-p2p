@@ -282,6 +282,9 @@ def index():
                 document.getElementById('loginPage').classList.remove('active');
                 document.getElementById('mainApp').classList.add('active');
                 loadDashboard();
+                updateInventoryList();
+                updateBillingList();
+                updateNotesList();
             } else {
                 document.getElementById('loginError').textContent = 'Invalid credentials';
                 document.getElementById('loginError').classList.remove('hidden');
@@ -513,6 +516,15 @@ def index():
             updateNotesList();
             loadDashboard();
         }
+        
+        // Make functions global
+        window.deleteInventory = deleteInventory;
+        window.deleteNote = deleteNote;
+        window.addBillingItem = addBillingItem;
+        window.removeBillingItem = removeBillingItem;
+        window.updateBillingTotal = updateBillingTotal;
+        window.showPage = showPage;
+        window.logout = logout;
         
         // Initialize billing total calculation
         document.addEventListener('DOMContentLoaded', function() {
