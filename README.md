@@ -1,4 +1,4 @@
-# Inventory Management System
+# inventory-trade-p2p
 
 A comprehensive inventory management software built with FastAPI, MongoDB, and React.
 
