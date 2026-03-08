@@ -230,3 +230,4 @@ inventory-management-system/
 ## License
 
 MIT License
+# inventory-trade-p2p
