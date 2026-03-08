@@ -2,27 +2,54 @@ from flask import Flask, render_template_string, request, jsonify
 from datetime import datetime
 import json
 import os
+import requests
 
 app = Flask(__name__)
 
-# Vercel KV database simulation (using file storage for persistence)
-DATA_FILE = '/tmp/inventory_data.json'
+# Upstash QStash configuration
+QSTASH_URL = "https://qstash.upstash.io"
+QSTASH_TOKEN = "eyJVc2VySUQiOiI0ZGE2NGNkOC0wNjAxLTRjMzMtYjU1Ni0zNDIxNzgyYTkwMTQiLCJQYXNzd29yZCI6IjNiZDJjYmE5ZWRmZTRmMjZhN2MxZDg2MzcxNWMwNzNhIn0="
+HEADERS = {
+    "Authorization": f"Bearer {QSTASH_TOKEN}",
+    "Content-Type": "application/json"
+}
+
+# Upstash KV REST API
+UPSTASH_REST_URL = "https://inventory-data.upstash.io"
 
 def load_data():
     try:
-        if os.path.exists(DATA_FILE):
-            with open(DATA_FILE, 'r') as f:
-                return json.load(f)
-    except:
-        pass
+        # Load from Upstash KV using REST API
+        response = requests.get(
+            f"{UPSTASH_REST_URL}/get/inventory_data",
+            headers={
+                "Authorization": f"Bearer {QSTASH_TOKEN}",
+                "Content-Type": "application/json"
+            }
+        )
+        if response.status_code == 200:
+            result = response.json()
+            if result and result != "null":
+                return json.loads(result) if isinstance(result, str) else result
+    except Exception as e:
+        print(f"Load error: {e}")
+    
     return {"inventory": [], "billing": [], "notes": []}
 
 def save_data(data):
     try:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-        return True
-    except:
+        # Save to Upstash KV using REST API
+        response = requests.post(
+            f"{UPSTASH_REST_URL}/set/inventory_data",
+            headers={
+                "Authorization": f"Bearer {QSTASH_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            json=data
+        )
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Save error: {e}")
         return False
 
 @app.route('/')
