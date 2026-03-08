@@ -1,26 +1,15 @@
-from flask import Flask, request, jsonify, render_template_string
-from flask_cors import CORS
+from flask import Flask, render_template_string
 from datetime import datetime
-import uuid
-import os
 
 app = Flask(__name__)
-CORS(app, origins=["*"])
-
-# Simple in-memory database (will work on Vercel)
-inventory_items = []
-billing_items = []
-notes_items = []
 
 @app.route('/')
 def index():
     return render_template_string('''
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventory Management System</title>
+    <title>Inventory Management</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #f5f5f5; }
@@ -60,7 +49,7 @@ def index():
                 <div class="login-card">
                     <h2 style="text-align: center; color: #0071ce; margin-bottom: 2rem;">Inventory Management</h2>
                     <div id="loginError" class="error hidden"></div>
-                    <form id="loginForm">
+                    <form onsubmit="handleLogin(event)">
                         <div class="form-group">
                             <label>User ID</label>
                             <input type="text" id="email" required placeholder="Enter user ID">
@@ -87,7 +76,7 @@ def index():
                     <button class="nav-btn" onclick="showPage('inventory')">Add Product</button>
                     <button class="nav-btn" onclick="showPage('billing')">Billing</button>
                     <button class="nav-btn" onclick="showPage('notes')">Notes</button>
-                    <button class="nav-btn" onclick="logout()">Logout</button>
+                    <button class="nav-btn" onclick="handleLogout()">Logout</button>
                 </div>
                 
                 <!-- Dashboard -->
@@ -119,18 +108,18 @@ def index():
                     <div class="card">
                         <h2>Add Product</h2>
                         <div id="inventorySuccess" class="success hidden"></div>
-                        <form id="inventoryForm">
+                        <form onsubmit="handleAddProduct(event)">
                             <div class="form-group">
                                 <label>Product Name *</label>
-                                <input type="text" name="name" required>
+                                <input type="text" id="productName" required>
                             </div>
                             <div class="form-group">
                                 <label>SKU *</label>
-                                <input type="text" name="sku" required>
+                                <input type="text" id="productSku" required>
                             </div>
                             <div class="form-group">
                                 <label>Category *</label>
-                                <select name="category" required>
+                                <select id="productCategory" required>
                                     <option value="">Select Category</option>
                                     <option value="Electronics">Electronics</option>
                                     <option value="Clothing">Clothing</option>
@@ -141,11 +130,11 @@ def index():
                             </div>
                             <div class="form-group">
                                 <label>Quantity *</label>
-                                <input type="number" name="quantity" required min="0">
+                                <input type="number" id="productQuantity" required min="0">
                             </div>
                             <div class="form-group">
                                 <label>Price (₹) *</label>
-                                <input type="number" name="price" required min="0" step="0.01">
+                                <input type="number" id="productPrice" required min="0" step="0.01">
                             </div>
                             <button type="submit" class="btn">Add Product</button>
                         </form>
@@ -174,14 +163,14 @@ def index():
                     <div class="card">
                         <h2>Create Invoice</h2>
                         <div id="billingSuccess" class="success hidden"></div>
-                        <form id="billingForm">
+                        <form onsubmit="handleCreateInvoice(event)">
                             <div class="form-group">
                                 <label>Customer Name *</label>
-                                <input type="text" name="customer_name" required>
+                                <input type="text" id="customerName" required>
                             </div>
                             <div class="form-group">
                                 <label>Invoice Number *</label>
-                                <input type="text" name="invoice_number" required>
+                                <input type="text" id="invoiceNumber" required>
                             </div>
                             <div class="form-group">
                                 <label>Items</label>
@@ -223,14 +212,14 @@ def index():
                     <div class="card">
                         <h2>Add Note</h2>
                         <div id="notesSuccess" class="success hidden"></div>
-                        <form id="notesForm">
+                        <form onsubmit="handleAddNote(event)">
                             <div class="form-group">
                                 <label>Title *</label>
-                                <input type="text" name="title" required>
+                                <input type="text" id="noteTitle" required>
                             </div>
                             <div class="form-group">
                                 <label>Category *</label>
-                                <select name="category" required>
+                                <select id="noteCategory" required>
                                     <option value="">Select Category</option>
                                     <option value="General">General</option>
                                     <option value="Important">Important</option>
@@ -240,7 +229,7 @@ def index():
                             </div>
                             <div class="form-group">
                                 <label>Content *</label>
-                                <textarea name="content" rows="4" required></textarea>
+                                <textarea id="noteContent" rows="4" required></textarea>
                             </div>
                             <button type="submit" class="btn">Add Note</button>
                         </form>
@@ -266,19 +255,16 @@ def index():
     </div>
     
     <script>
-        let isLoggedIn = false;
         let inventory = [];
         let billing = [];
         let notes = [];
         
-        // Login
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-            e.preventDefault();
+        function handleLogin(event) {
+            event.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             
             if ((email === '743663' || email === 'admin@inventory.com') && password === 'girish7890@A') {
-                isLoggedIn = true;
                 document.getElementById('loginPage').classList.remove('active');
                 document.getElementById('mainApp').classList.add('active');
                 loadDashboard();
@@ -289,13 +275,13 @@ def index():
                 document.getElementById('loginError').textContent = 'Invalid credentials';
                 document.getElementById('loginError').classList.remove('hidden');
             }
-        });
+        }
         
-        function logout() {
-            isLoggedIn = false;
+        function handleLogout() {
             document.getElementById('mainApp').classList.remove('active');
             document.getElementById('loginPage').classList.add('active');
-            document.getElementById('loginForm').reset();
+            document.getElementById('email').value = '';
+            document.getElementById('password').value = '';
         }
         
         function showPage(pageName) {
@@ -333,14 +319,7 @@ def index():
             
             inventory.forEach(item => {
                 const row = tbody.insertRow();
-                row.innerHTML = `
-                    <td>${item.name}</td>
-                    <td>${item.sku}</td>
-                    <td>${item.category}</td>
-                    <td>${item.quantity}</td>
-                    <td>₹${item.price.toFixed(2)}</td>
-                    <td><button class="btn btn-danger" onclick="deleteInventory('${item.id}')">Delete</button></td>
-                `;
+                row.innerHTML = '<td>' + item.name + '</td><td>' + item.sku + '</td><td>' + item.category + '</td><td>' + item.quantity + '</td><td>₹' + item.price.toFixed(2) + '</td><td><button class="btn btn-danger" onclick="deleteInventory(\\'' + item.id + '\\')">Delete</button></td>';
             });
         }
         
@@ -355,12 +334,7 @@ def index():
             
             billing.forEach(bill => {
                 const row = tbody.insertRow();
-                row.innerHTML = `
-                    <td>${bill.invoice_number}</td>
-                    <td>${bill.customer_name}</td>
-                    <td>₹${bill.total_amount.toFixed(2)}</td>
-                    <td>${bill.status}</td>
-                `;
+                row.innerHTML = '<td>' + bill.invoice_number + '</td><td>' + bill.customer_name + '</td><td>₹' + bill.total_amount.toFixed(2) + '</td><td>' + bill.status + '</td>';
             });
         }
         
@@ -375,34 +349,34 @@ def index():
             
             notes.forEach(note => {
                 const row = tbody.insertRow();
-                row.innerHTML = `
-                    <td>${note.title}</td>
-                    <td>${note.category}</td>
-                    <td>${new Date().toLocaleDateString()}</td>
-                    <td><button class="btn btn-danger" onclick="deleteNote('${note.id}')">Delete</button></td>
-                `;
+                row.innerHTML = '<td>' + note.title + '</td><td>' + note.category + '</td><td>' + new Date().toLocaleDateString() + '</td><td><button class="btn btn-danger" onclick="deleteNote(\\'' + note.id + '\\')">Delete</button></td>';
             });
         }
         
-        // Inventory Form
-        document.getElementById('inventoryForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(e.target);
+        function handleAddProduct(event) {
+            event.preventDefault();
             const item = {
                 id: Date.now().toString(),
-                name: formData.get('name'),
-                sku: formData.get('sku'),
-                category: formData.get('category'),
-                quantity: parseInt(formData.get('quantity')),
-                price: parseFloat(formData.get('price'))
+                name: document.getElementById('productName').value,
+                sku: document.getElementById('productSku').value,
+                category: document.getElementById('productCategory').value,
+                quantity: parseInt(document.getElementById('productQuantity').value),
+                price: parseFloat(document.getElementById('productPrice').value)
             };
             
             inventory.push(item);
             updateInventoryList();
             loadDashboard();
-            e.target.reset();
+            
+            // Reset form
+            document.getElementById('productName').value = '';
+            document.getElementById('productSku').value = '';
+            document.getElementById('productCategory').value = '';
+            document.getElementById('productQuantity').value = '';
+            document.getElementById('productPrice').value = '';
+            
             showSuccess('inventorySuccess', 'Product added successfully!');
-        });
+        }
         
         function deleteInventory(id) {
             inventory = inventory.filter(item => item.id !== id);
@@ -410,17 +384,11 @@ def index():
             loadDashboard();
         }
         
-        // Billing Form
         function addBillingItem() {
             const container = document.getElementById('billingItems');
             const newItem = document.createElement('div');
             newItem.className = 'billing-item';
-            newItem.innerHTML = `
-                <input type="text" placeholder="Item name" class="item-name" required>
-                <input type="number" placeholder="Quantity" class="item-quantity" min="1" required>
-                <input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required>
-                <button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button>
-            `;
+            newItem.innerHTML = '<input type="text" placeholder="Item name" class="item-name" required><input type="number" placeholder="Quantity" class="item-quantity" min="1" required><input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required><button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button>';
             container.appendChild(newItem);
             
             newItem.querySelectorAll('input').forEach(input => {
@@ -449,9 +417,8 @@ def index():
             document.getElementById('totalAmount').textContent = total.toFixed(2);
         }
         
-        document.getElementById('billingForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(e.target);
+        function handleCreateInvoice(event) {
+            event.preventDefault();
             
             const items = [];
             document.querySelectorAll('.billing-item').forEach(itemRow => {
@@ -466,8 +433,8 @@ def index():
             
             const bill = {
                 id: Date.now().toString(),
-                customer_name: formData.get('customer_name'),
-                invoice_number: formData.get('invoice_number'),
+                customer_name: document.getElementById('customerName').value,
+                invoice_number: document.getElementById('invoiceNumber').value,
                 items: items,
                 total_amount: items.reduce((sum, item) => sum + (item.quantity * item.price), 0),
                 status: 'Pending'
@@ -476,55 +443,44 @@ def index():
             billing.push(bill);
             updateBillingList();
             loadDashboard();
-            e.target.reset();
             
-            // Reset billing items
-            document.getElementById('billingItems').innerHTML = `
-                <div class="billing-item">
-                    <input type="text" placeholder="Item name" class="item-name" required>
-                    <input type="number" placeholder="Quantity" class="item-quantity" min="1" required>
-                    <input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required>
-                    <button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button>
-                </div>
-            `;
+            // Reset form
+            document.getElementById('customerName').value = '';
+            document.getElementById('invoiceNumber').value = '';
+            document.getElementById('billingItems').innerHTML = '<div class="billing-item"><input type="text" placeholder="Item name" class="item-name" required><input type="number" placeholder="Quantity" class="item-quantity" min="1" required><input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required><button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button></div>';
             updateBillingTotal();
+            
             showSuccess('billingSuccess', 'Invoice created successfully!');
-        });
+        }
         
-        // Notes Form
-        document.getElementById('notesForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(e.target);
+        function handleAddNote(event) {
+            event.preventDefault();
             
             const note = {
                 id: Date.now().toString(),
-                title: formData.get('title'),
-                category: formData.get('category'),
-                content: formData.get('content'),
+                title: document.getElementById('noteTitle').value,
+                category: document.getElementById('noteCategory').value,
+                content: document.getElementById('noteContent').value,
                 created_at: new Date().toISOString()
             };
             
             notes.push(note);
             updateNotesList();
             loadDashboard();
-            e.target.reset();
+            
+            // Reset form
+            document.getElementById('noteTitle').value = '';
+            document.getElementById('noteCategory').value = '';
+            document.getElementById('noteContent').value = '';
+            
             showSuccess('notesSuccess', 'Note added successfully!');
-        });
+        }
         
         function deleteNote(id) {
             notes = notes.filter(note => note.id !== id);
             updateNotesList();
             loadDashboard();
         }
-        
-        // Make functions global
-        window.deleteInventory = deleteInventory;
-        window.deleteNote = deleteNote;
-        window.addBillingItem = addBillingItem;
-        window.removeBillingItem = removeBillingItem;
-        window.updateBillingTotal = updateBillingTotal;
-        window.showPage = showPage;
-        window.logout = logout;
         
         // Initialize billing total calculation
         document.addEventListener('DOMContentLoaded', function() {
@@ -539,7 +495,7 @@ def index():
 
 @app.route('/health')
 def health():
-    return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
+    return {"status": "ok", "timestamp": datetime.now().isoformat()}
 
 if __name__ == '__main__':
     app.run(debug=True)
