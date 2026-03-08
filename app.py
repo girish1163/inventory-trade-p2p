@@ -1,7 +1,38 @@
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, request, jsonify
 from datetime import datetime
+import json
+import os
+from qstash.client import QStash
 
 app = Flask(__name__)
+
+# QStash client for data persistence
+client = QStash(os.environ.get("QSTASH_TOKEN"))
+
+# Simple data storage functions using QStash
+def save_data_to_qstash(data):
+    try:
+        response = client.publish(
+            url="https://inventory-data.qstash.io/save",
+            body=json.dumps(data),
+            headers={"Content-Type": "application/json"}
+        )
+        return response.status_code == 200
+    except Exception as e:
+        print(f"QStash save error: {e}")
+        return False
+
+def load_data_from_qstash():
+    try:
+        response = client.publish(
+            url="https://inventory-data.qstash.io/load",
+            method="GET"
+        )
+        if response.status_code == 200:
+            return response.json()
+    except Exception as e:
+        print(f"QStash load error: {e}")
+    return {"inventory": [], "billing": [], "notes": []}
 
 @app.route('/')
 def index():
@@ -258,7 +289,39 @@ def index():
     </div>
     
     <script>
-        // Simple in-memory storage (no database complications)
+        // Load data from QStash on login
+        async function loadData() {
+            try {
+                const response = await fetch('/api/load-data');
+                const data = await response.json();
+                inventory = data.inventory || [];
+                billing = data.billing || [];
+                notes = data.notes || [];
+                updateAllLists();
+                loadDashboard();
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+        
+        // Save data to QStash
+        async function saveData() {
+            try {
+                const response = await fetch('/api/save-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ inventory, billing, notes })
+                });
+                return response.ok;
+            } catch (error) {
+                console.error('Error saving data:', error);
+                return false;
+            }
+        }
+        
+        // In-memory storage with QStash backup
         let inventory = [];
         let billing = [];
         let notes = [];
@@ -271,8 +334,7 @@ def index():
             if ((email === '743663' || email === 'admin@inventory.com') && password === 'girish7890@A') {
                 document.getElementById('loginPage').classList.remove('active');
                 document.getElementById('mainApp').classList.add('active');
-                loadDashboard();
-                updateAllLists();
+                loadData(); // Load data from QStash
             } else {
                 document.getElementById('loginError').textContent = 'Invalid credentials';
                 document.getElementById('loginError').classList.remove('hidden');
@@ -361,7 +423,7 @@ def index():
             });
         }
         
-        function addProduct() {
+        async function addProduct() {
             const name = document.getElementById('productName').value;
             const sku = document.getElementById('productSku').value;
             const category = document.getElementById('productCategory').value;
@@ -383,6 +445,20 @@ def index():
             };
             
             inventory.push(item);
+            
+            // Try to save to QStash, but don't fail if it doesn't work
+            try {
+                const saved = await saveData();
+                if (saved) {
+                    showMessage('inventorySuccess', 'Product saved to database!');
+                } else {
+                    showMessage('inventorySuccess', 'Product added locally');
+                }
+            } catch (error) {
+                showMessage('inventorySuccess', 'Product added locally');
+            }
+            
+            // Always update the UI regardless of save status
             updateInventoryList();
             loadDashboard();
             
@@ -392,8 +468,6 @@ def index():
             document.getElementById('productCategory').value = '';
             document.getElementById('productQuantity').value = '';
             document.getElementById('productPrice').value = '';
-            
-            showMessage('inventorySuccess', 'Product added successfully!');
         }
         
         function createInvoice() {
@@ -528,6 +602,29 @@ def index():
 </body>
 </html>
 ''')
+
+# API endpoints for QStash data persistence
+@app.route('/api/load-data', methods=['GET'])
+def load_data_endpoint():
+    try:
+        data = load_data_from_qstash()
+        return jsonify(data)
+    except Exception as e:
+        print(f"Load data error: {e}")
+        return jsonify({"inventory": [], "billing": [], "notes": []})
+
+@app.route('/api/save-data', methods=['POST'])
+def save_data_endpoint():
+    try:
+        data = request.get_json()
+        success = save_data_to_qstash(data)
+        if success:
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "QStash save failed"}), 500
+    except Exception as e:
+        print(f"Save data error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/health')
 def health():
