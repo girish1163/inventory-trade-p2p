@@ -326,9 +326,10 @@ def index():
             }
         }
         
-        // Save data to server
+        // Save data to server (with error handling)
         async function saveData() {
             try {
+                console.log('Attempting to save data...');
                 const response = await fetch('/api/data', {
                     method: 'POST',
                     headers: {
@@ -336,6 +337,7 @@ def index():
                     },
                     body: JSON.stringify({ inventory, billing, notes })
                 });
+                console.log('Save response status:', response.status);
                 return response.ok;
             } catch (error) {
                 console.error('Error saving data:', error);
@@ -441,11 +443,15 @@ def index():
         }
         
         async function addProduct() {
+            console.log('Add product button clicked');
+            
             const name = document.getElementById('productName').value;
             const sku = document.getElementById('productSku').value;
             const category = document.getElementById('productCategory').value;
             const quantity = document.getElementById('productQuantity').value;
             const price = document.getElementById('productPrice').value;
+            
+            console.log('Form values:', { name, sku, category, quantity, price });
             
             if (!name || !sku || !category || !quantity || !price) {
                 showMessage('inventoryError', 'Please fill all required fields', true);
@@ -461,26 +467,37 @@ def index():
                 price: parseFloat(price)
             };
             
+            console.log('Item to add:', item);
+            
             inventory.push(item);
             
-            // Save to server
-            const saved = await saveData();
-            if (saved) {
-                updateInventoryList();
-                loadDashboard();
+            // Try to save to server, but don't fail if it doesn't work
+            try {
+                const saved = await saveData();
+                console.log('Save result:', saved);
                 
-                // Reset form
-                document.getElementById('productName').value = '';
-                document.getElementById('productSku').value = '';
-                document.getElementById('productCategory').value = '';
-                document.getElementById('productQuantity').value = '';
-                document.getElementById('productPrice').value = '';
-                
-                showMessage('inventorySuccess', 'Product added successfully!');
-            } else {
-                showMessage('inventoryError', 'Failed to save product', true);
-                inventory.pop(); // Remove the item if save failed
+                if (saved) {
+                    showMessage('inventorySuccess', 'Product saved to database!');
+                } else {
+                    showMessage('inventorySuccess', 'Product added locally (database save failed)');
+                }
+            } catch (error) {
+                console.error('Save error:', error);
+                showMessage('inventorySuccess', 'Product added locally (database error)');
             }
+            
+            // Always update the UI regardless of save status
+            updateInventoryList();
+            loadDashboard();
+            
+            // Reset form
+            document.getElementById('productName').value = '';
+            document.getElementById('productSku').value = '';
+            document.getElementById('productCategory').value = '';
+            document.getElementById('productQuantity').value = '';
+            document.getElementById('productPrice').value = '';
+            
+            console.log('Product added successfully');
         }
         
         async function createInvoice() {
@@ -641,15 +658,28 @@ def index():
 # API endpoints for data persistence
 @app.route('/api/data', methods=['GET'])
 def get_data():
-    return jsonify(load_data())
+    try:
+        data = load_data()
+        print(f"Loaded data: {len(data.get('inventory', []))} items")
+        return jsonify(data)
+    except Exception as e:
+        print(f"Get data error: {e}")
+        return jsonify({"inventory": [], "billing": [], "notes": []})
 
 @app.route('/api/data', methods=['POST'])
 def save_data_endpoint():
-    data = request.get_json()
-    if save_data(data):
-        return jsonify({"success": True})
-    else:
-        return jsonify({"success": False}), 500
+    try:
+        data = request.get_json()
+        print(f"Saving data: {len(data.get('inventory', []))} items")
+        success = save_data(data)
+        print(f"Save result: {success}")
+        if success:
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Database save failed"}), 500
+    except Exception as e:
+        print(f"Save endpoint error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/health')
 def health():
