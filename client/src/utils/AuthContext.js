@@ -15,8 +15,7 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('token');
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      // Verify token is valid by making a request
-      axios.get('/api/auth/verify')
+      axios.get('/api/auth/me')
         .then(response => {
           setUser(response.data.user);
         })
@@ -38,11 +37,8 @@ export const AuthProvider = ({ children }) => {
         email: credentials.email,
         password: credentials.password
       });
-      const token = response.data.token;
-      const responseMe = await axios.get('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const user = responseMe.data.user;
+      const token = response.data.access_token;
+      const user = response.data.user;
       
       localStorage.setItem('token', token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;

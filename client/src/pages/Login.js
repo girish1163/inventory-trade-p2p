@@ -4,8 +4,8 @@ import { useAuth } from '../utils/AuthContext';
 
 const Login = () => {
   const [credentials, setCredentials] = useState({
-    email: '743663',
-    password: 'girish7890@A'
+    email: '',
+    password: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,27 +24,14 @@ const Login = () => {
     setLoading(true);
     setError('');
 
-    // For demo purposes, accept the default credentials without email format validation
-    const loginEmail = credentials.email === '743663' ? 'admin@inventory.com' : credentials.email;
-
-    const response = await axios.post('/api/auth/login', {
-      email: loginEmail, // Use loginEmail instead of credentials.email
-      password: credentials.password
-    });
-
-    if (response.data.success) {
-      navigate('/');
+    const result = await login(credentials);
+    if (result.success) {
+      navigate('/dashboard');
     } else {
-      setError(response.data.message);
+      setError(result.message);
     }
-    setLoading(false);
-  };
 
-  const handleQuickLogin = () => {
-    setCredentials({
-      email: '743663',
-      password: 'girish7890@A'
-    });
+    setLoading(false);
   };
 
   return (
@@ -92,37 +79,6 @@ const Login = () => {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-
-        <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-          <button 
-            type="button" 
-            onClick={handleQuickLogin}
-            style={{
-              background: 'none',
-              border: '1px solid #667eea',
-              color: '#667eea',
-              padding: '0.5rem 1rem',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              fontSize: '0.8rem'
-            }}
-          >
-            Use Default Credentials
-          </button>
-        </div>
-
-        <div style={{ 
-          marginTop: '1rem', 
-          padding: '1rem', 
-          backgroundColor: '#f8f9fa', 
-          borderRadius: '5px',
-          fontSize: '0.8rem',
-          color: '#666'
-        }}>
-          <strong>Default Credentials:</strong><br />
-          User ID: 743663<br />
-          Password: girish7890@A
-        </div>
       </div>
     </div>
   );
