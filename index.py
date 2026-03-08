@@ -35,7 +35,7 @@ def calculate_status(quantity, min_stock):
 # Authentication endpoints
 @app.route('/api/auth/login', methods=['POST'])
 def login():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     email = data.get('email')
     password = data.get('password')
     
@@ -92,7 +92,7 @@ def get_inventory_items():
 
 @app.route('/api/inventory', methods=['POST'])
 def create_inventory_item():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     new_item = {
         "id": str(uuid.uuid4()),
         **data,
@@ -105,7 +105,7 @@ def create_inventory_item():
 
 @app.route('/api/inventory/<item_id>', methods=['PUT'])
 def update_inventory_item(item_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     for i, item in enumerate(DATABASE["inventory"]):
         if item["id"] == item_id:
             updated_item = {
@@ -135,7 +135,7 @@ def get_billing_items():
 
 @app.route('/api/billing', methods=['POST'])
 def create_billing_item():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     new_billing = {
         "id": str(uuid.uuid4()),
         **data,
@@ -147,7 +147,7 @@ def create_billing_item():
 
 @app.route('/api/billing/<billing_id>/status', methods=['PUT'])
 def update_billing_status(billing_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     status = data.get('status')
     
     for i, item in enumerate(DATABASE["billing"]):
@@ -164,7 +164,7 @@ def get_notes():
 
 @app.route('/api/notes', methods=['POST'])
 def create_note():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     new_note = {
         "id": str(uuid.uuid4()),
         **data,
@@ -176,7 +176,7 @@ def create_note():
 
 @app.route('/api/notes/<note_id>', methods=['PUT'])
 def update_note(note_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     for i, note in enumerate(DATABASE["notes"]):
         if note["id"] == note_id:
             updated_note = {
@@ -385,10 +385,6 @@ def health_check():
         "database": "In-Memory Demo",
         "timestamp": datetime.now().isoformat()
     })
-
-# Vercel serverless handler
-def handler(request):
-    return app(request.environ, lambda status, headers: None)
 
 if __name__ == '__main__':
     app.run(debug=True)
