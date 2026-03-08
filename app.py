@@ -108,7 +108,7 @@ def index():
                     <div class="card">
                         <h2>Add Product</h2>
                         <div id="inventorySuccess" class="success hidden"></div>
-                        <form onsubmit="handleAddProduct(event)">
+                        <form id="inventoryForm">
                             <div class="form-group">
                                 <label>Product Name *</label>
                                 <input type="text" id="productName" required>
@@ -136,7 +136,7 @@ def index():
                                 <label>Price (₹) *</label>
                                 <input type="number" id="productPrice" required min="0" step="0.01">
                             </div>
-                            <button type="submit" class="btn">Add Product</button>
+                            <button type="button" class="btn" onclick="addProduct()">Add Product</button>
                         </form>
                         
                         <h3 style="margin-top: 2rem;">Products List</h3>
@@ -163,7 +163,7 @@ def index():
                     <div class="card">
                         <h2>Create Invoice</h2>
                         <div id="billingSuccess" class="success hidden"></div>
-                        <form onsubmit="handleCreateInvoice(event)">
+                        <form id="billingForm">
                             <div class="form-group">
                                 <label>Customer Name *</label>
                                 <input type="text" id="customerName" required>
@@ -187,7 +187,7 @@ def index():
                             <div class="form-group">
                                 <label>Total Amount: ₹<span id="totalAmount">0.00</span></label>
                             </div>
-                            <button type="submit" class="btn">Create Invoice</button>
+                            <button type="button" class="btn" onclick="createInvoice()">Create Invoice</button>
                         </form>
                         
                         <h3 style="margin-top: 2rem;">Invoices</h3>
@@ -353,15 +353,25 @@ def index():
             });
         }
         
-        function handleAddProduct(event) {
-            event.preventDefault();
+        function addProduct() {
+            const name = document.getElementById('productName').value;
+            const sku = document.getElementById('productSku').value;
+            const category = document.getElementById('productCategory').value;
+            const quantity = document.getElementById('productQuantity').value;
+            const price = document.getElementById('productPrice').value;
+            
+            if (!name || !sku || !category || !quantity || !price) {
+                alert('Please fill all required fields');
+                return;
+            }
+            
             const item = {
                 id: Date.now().toString(),
-                name: document.getElementById('productName').value,
-                sku: document.getElementById('productSku').value,
-                category: document.getElementById('productCategory').value,
-                quantity: parseInt(document.getElementById('productQuantity').value),
-                price: parseFloat(document.getElementById('productPrice').value)
+                name: name,
+                sku: sku,
+                category: category,
+                quantity: parseInt(quantity),
+                price: parseFloat(price)
             };
             
             inventory.push(item);
@@ -376,6 +386,53 @@ def index():
             document.getElementById('productPrice').value = '';
             
             showSuccess('inventorySuccess', 'Product added successfully!');
+        }
+        
+        function createInvoice() {
+            const customerName = document.getElementById('customerName').value;
+            const invoiceNumber = document.getElementById('invoiceNumber').value;
+            
+            if (!customerName || !invoiceNumber) {
+                alert('Please fill all required fields');
+                return;
+            }
+            
+            const items = [];
+            document.querySelectorAll('.billing-item').forEach(itemRow => {
+                const name = itemRow.querySelector('.item-name').value;
+                const quantity = parseInt(itemRow.querySelector('.item-quantity').value);
+                const price = parseFloat(itemRow.querySelector('.item-price').value);
+                
+                if (name && quantity && price) {
+                    items.push({ name, quantity, price });
+                }
+            });
+            
+            if (items.length === 0) {
+                alert('Please add at least one item');
+                return;
+            }
+            
+            const bill = {
+                id: Date.now().toString(),
+                customer_name: customerName,
+                invoice_number: invoiceNumber,
+                items: items,
+                total_amount: items.reduce((sum, item) => sum + (item.quantity * item.price), 0),
+                status: 'Pending'
+            };
+            
+            billing.push(bill);
+            updateBillingList();
+            loadDashboard();
+            
+            // Reset form
+            document.getElementById('customerName').value = '';
+            document.getElementById('invoiceNumber').value = '';
+            document.getElementById('billingItems').innerHTML = '<div class="billing-item"><input type="text" placeholder="Item name" class="item-name" required><input type="number" placeholder="Quantity" class="item-quantity" min="1" required><input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required><button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button></div>';
+            updateBillingTotal();
+            
+            showSuccess('billingSuccess', 'Invoice created successfully!');
         }
         
         function deleteInventory(id) {
@@ -419,38 +476,6 @@ def index():
         
         function handleCreateInvoice(event) {
             event.preventDefault();
-            
-            const items = [];
-            document.querySelectorAll('.billing-item').forEach(itemRow => {
-                const name = itemRow.querySelector('.item-name').value;
-                const quantity = parseInt(itemRow.querySelector('.item-quantity').value);
-                const price = parseFloat(itemRow.querySelector('.item-price').value);
-                
-                if (name && quantity && price) {
-                    items.push({ name, quantity, price });
-                }
-            });
-            
-            const bill = {
-                id: Date.now().toString(),
-                customer_name: document.getElementById('customerName').value,
-                invoice_number: document.getElementById('invoiceNumber').value,
-                items: items,
-                total_amount: items.reduce((sum, item) => sum + (item.quantity * item.price), 0),
-                status: 'Pending'
-            };
-            
-            billing.push(bill);
-            updateBillingList();
-            loadDashboard();
-            
-            // Reset form
-            document.getElementById('customerName').value = '';
-            document.getElementById('invoiceNumber').value = '';
-            document.getElementById('billingItems').innerHTML = '<div class="billing-item"><input type="text" placeholder="Item name" class="item-name" required><input type="number" placeholder="Quantity" class="item-quantity" min="1" required><input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required><button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button></div>';
-            updateBillingTotal();
-            
-            showSuccess('billingSuccess', 'Invoice created successfully!');
         }
         
         function handleAddNote(event) {
