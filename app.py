@@ -1,56 +1,7 @@
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string
 from datetime import datetime
-import json
-import os
-import requests
 
 app = Flask(__name__)
-
-# Upstash QStash configuration
-QSTASH_URL = "https://qstash.upstash.io"
-QSTASH_TOKEN = "eyJVc2VySUQiOiI0ZGE2NGNkOC0wNjAxLTRjMzMtYjU1Ni0zNDIxNzgyYTkwMTQiLCJQYXNzd29yZCI6IjNiZDJjYmE5ZWRmZTRmMjZhN2MxZDg2MzcxNWMwNzNhIn0="
-HEADERS = {
-    "Authorization": f"Bearer {QSTASH_TOKEN}",
-    "Content-Type": "application/json"
-}
-
-# Upstash KV REST API
-UPSTASH_REST_URL = "https://inventory-data.upstash.io"
-
-def load_data():
-    try:
-        # Load from Upstash KV using REST API
-        response = requests.get(
-            f"{UPSTASH_REST_URL}/get/inventory_data",
-            headers={
-                "Authorization": f"Bearer {QSTASH_TOKEN}",
-                "Content-Type": "application/json"
-            }
-        )
-        if response.status_code == 200:
-            result = response.json()
-            if result and result != "null":
-                return json.loads(result) if isinstance(result, str) else result
-    except Exception as e:
-        print(f"Load error: {e}")
-    
-    return {"inventory": [], "billing": [], "notes": []}
-
-def save_data(data):
-    try:
-        # Save to Upstash KV using REST API
-        response = requests.post(
-            f"{UPSTASH_REST_URL}/set/inventory_data",
-            headers={
-                "Authorization": f"Bearer {QSTASH_TOKEN}",
-                "Content-Type": "application/json"
-            },
-            json=data
-        )
-        return response.status_code == 200
-    except Exception as e:
-        print(f"Save error: {e}")
-        return False
 
 @app.route('/')
 def index():
@@ -202,7 +153,7 @@ def index():
                                 </tr>
                             </thead>
                             <tbody id="inventoryList">
-                                <tr><td colspan="6" style="text-align: center;">Loading...</td></tr>
+                                <tr><td colspan="6" style="text-align: center;">No products added yet</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -252,7 +203,7 @@ def index():
                                 </tr>
                             </thead>
                             <tbody id="billingList">
-                                <tr><td colspan="4" style="text-align: center;">Loading...</td></tr>
+                                <tr><td colspan="4" style="text-align: center;">No invoices created yet</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -297,7 +248,7 @@ def index():
                                 </tr>
                             </thead>
                             <tbody id="notesList">
-                                <tr><td colspan="4" style="text-align: center;">Loading...</td></tr>
+                                <tr><td colspan="4" style="text-align: center;">No notes added yet</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -307,43 +258,10 @@ def index():
     </div>
     
     <script>
+        // Simple in-memory storage (no database complications)
         let inventory = [];
         let billing = [];
         let notes = [];
-        
-        // Load data from server
-        async function loadData() {
-            try {
-                const response = await fetch('/api/data');
-                const data = await response.json();
-                inventory = data.inventory || [];
-                billing = data.billing || [];
-                notes = data.notes || [];
-                updateAllLists();
-                loadDashboard();
-            } catch (error) {
-                console.error('Error loading data:', error);
-            }
-        }
-        
-        // Save data to server (with error handling)
-        async function saveData() {
-            try {
-                console.log('Attempting to save data...');
-                const response = await fetch('/api/data', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ inventory, billing, notes })
-                });
-                console.log('Save response status:', response.status);
-                return response.ok;
-            } catch (error) {
-                console.error('Error saving data:', error);
-                return false;
-            }
-        }
         
         function handleLogin(event) {
             event.preventDefault();
@@ -353,7 +271,8 @@ def index():
             if ((email === '743663' || email === 'admin@inventory.com') && password === 'girish7890@A') {
                 document.getElementById('loginPage').classList.remove('active');
                 document.getElementById('mainApp').classList.add('active');
-                loadData(); // Load data from server
+                loadDashboard();
+                updateAllLists();
             } else {
                 document.getElementById('loginError').textContent = 'Invalid credentials';
                 document.getElementById('loginError').classList.remove('hidden');
@@ -442,16 +361,12 @@ def index():
             });
         }
         
-        async function addProduct() {
-            console.log('Add product button clicked');
-            
+        function addProduct() {
             const name = document.getElementById('productName').value;
             const sku = document.getElementById('productSku').value;
             const category = document.getElementById('productCategory').value;
             const quantity = document.getElementById('productQuantity').value;
             const price = document.getElementById('productPrice').value;
-            
-            console.log('Form values:', { name, sku, category, quantity, price });
             
             if (!name || !sku || !category || !quantity || !price) {
                 showMessage('inventoryError', 'Please fill all required fields', true);
@@ -467,26 +382,7 @@ def index():
                 price: parseFloat(price)
             };
             
-            console.log('Item to add:', item);
-            
             inventory.push(item);
-            
-            // Try to save to server, but don't fail if it doesn't work
-            try {
-                const saved = await saveData();
-                console.log('Save result:', saved);
-                
-                if (saved) {
-                    showMessage('inventorySuccess', 'Product saved to database!');
-                } else {
-                    showMessage('inventorySuccess', 'Product added locally (database save failed)');
-                }
-            } catch (error) {
-                console.error('Save error:', error);
-                showMessage('inventorySuccess', 'Product added locally (database error)');
-            }
-            
-            // Always update the UI regardless of save status
             updateInventoryList();
             loadDashboard();
             
@@ -497,10 +393,10 @@ def index():
             document.getElementById('productQuantity').value = '';
             document.getElementById('productPrice').value = '';
             
-            console.log('Product added successfully');
+            showMessage('inventorySuccess', 'Product added successfully!');
         }
         
-        async function createInvoice() {
+        function createInvoice() {
             const customerName = document.getElementById('customerName').value;
             const invoiceNumber = document.getElementById('invoiceNumber').value;
             
@@ -535,27 +431,19 @@ def index():
             };
             
             billing.push(bill);
+            updateBillingList();
+            loadDashboard();
             
-            // Save to server
-            const saved = await saveData();
-            if (saved) {
-                updateBillingList();
-                loadDashboard();
-                
-                // Reset form
-                document.getElementById('customerName').value = '';
-                document.getElementById('invoiceNumber').value = '';
-                document.getElementById('billingItems').innerHTML = '<div class="billing-item"><input type="text" placeholder="Item name" class="item-name" required><input type="number" placeholder="Quantity" class="item-quantity" min="1" required><input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required><button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button></div>';
-                updateBillingTotal();
-                
-                showMessage('billingSuccess', 'Invoice created successfully!');
-            } else {
-                showMessage('billingError', 'Failed to save invoice', true);
-                billing.pop(); // Remove the bill if save failed
-            }
+            // Reset form
+            document.getElementById('customerName').value = '';
+            document.getElementById('invoiceNumber').value = '';
+            document.getElementById('billingItems').innerHTML = '<div class="billing-item"><input type="text" placeholder="Item name" class="item-name" required><input type="number" placeholder="Quantity" class="item-quantity" min="1" required><input type="number" placeholder="Price (₹)" class="item-price" min="0" step="0.01" required><button type="button" class="btn btn-danger" onclick="removeBillingItem(this)">Remove</button></div>';
+            updateBillingTotal();
+            
+            showMessage('billingSuccess', 'Invoice created successfully!');
         }
         
-        async function addNote() {
+        function addNote() {
             const title = document.getElementById('noteTitle').value;
             const category = document.getElementById('noteCategory').value;
             const content = document.getElementById('noteContent').value;
@@ -574,41 +462,27 @@ def index():
             };
             
             notes.push(note);
+            updateNotesList();
+            loadDashboard();
             
-            // Save to server
-            const saved = await saveData();
-            if (saved) {
-                updateNotesList();
-                loadDashboard();
-                
-                // Reset form
-                document.getElementById('noteTitle').value = '';
-                document.getElementById('noteCategory').value = '';
-                document.getElementById('noteContent').value = '';
-                
-                showMessage('notesSuccess', 'Note added successfully!');
-            } else {
-                showMessage('notesError', 'Failed to save note', true);
-                notes.pop(); // Remove the note if save failed
-            }
+            // Reset form
+            document.getElementById('noteTitle').value = '';
+            document.getElementById('noteCategory').value = '';
+            document.getElementById('noteContent').value = '';
+            
+            showMessage('notesSuccess', 'Note added successfully!');
         }
         
-        async function deleteInventory(id) {
+        function deleteInventory(id) {
             inventory = inventory.filter(item => item.id !== id);
-            const saved = await saveData();
-            if (saved) {
-                updateInventoryList();
-                loadDashboard();
-            }
+            updateInventoryList();
+            loadDashboard();
         }
         
-        async function deleteNote(id) {
+        function deleteNote(id) {
             notes = notes.filter(note => note.id !== id);
-            const saved = await saveData();
-            if (saved) {
-                updateNotesList();
-                loadDashboard();
-            }
+            updateNotesList();
+            loadDashboard();
         }
         
         function addBillingItem() {
@@ -654,32 +528,6 @@ def index():
 </body>
 </html>
 ''')
-
-# API endpoints for data persistence
-@app.route('/api/data', methods=['GET'])
-def get_data():
-    try:
-        data = load_data()
-        print(f"Loaded data: {len(data.get('inventory', []))} items")
-        return jsonify(data)
-    except Exception as e:
-        print(f"Get data error: {e}")
-        return jsonify({"inventory": [], "billing": [], "notes": []})
-
-@app.route('/api/data', methods=['POST'])
-def save_data_endpoint():
-    try:
-        data = request.get_json()
-        print(f"Saving data: {len(data.get('inventory', []))} items")
-        success = save_data(data)
-        print(f"Save result: {success}")
-        if success:
-            return jsonify({"success": True})
-        else:
-            return jsonify({"success": False, "error": "Database save failed"}), 500
-    except Exception as e:
-        print(f"Save endpoint error: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/health')
 def health():
